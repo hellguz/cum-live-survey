@@ -1,0 +1,23 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap");
+
+:root {
+  --ink: #111111;
+  --muted: #767676;
+  --accent: #1e3aff;
+  --tint: #dfe4ff;
+  --ground: #ececec;
+  --paper: #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: Geist, Arial, sans-serif; }
+button, input { font: inherit; color: inherit; }
+
+.meta { font-size: 13px; letter-spacing: .07em; text-transform: uppercase; }
+.muted { color: var(--muted); }
+.accent { color: var(--accent); }
+
+header.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 16px; border-bottom: 2px solid var(--ink);
+}
+header.bar svg.logo { height: 28px; width: auto; display: block; }

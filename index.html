@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Who's in the room</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  main { max-width: 560px; margin: 0 auto; padding: 0 16px 48px; }
+  .intro { padding: 28px 0 8px; }
+  .intro h1 { font-size: 40px; font-weight: 500; letter-spacing: -1px; line-height: 1.05; margin: 10px 0 8px; }
+  .intro p { font-size: 17px; color: #444; margin: 0; }
+  .q { border-top: 2px solid var(--ink); padding: 18px 0 22px; margin-top: 18px; }
+  .q h2 { font-size: 22px; font-weight: 500; margin: 8px 0 14px; line-height: 1.2; }
+  .opts { display: grid; gap: 8px; }
+  .opt { text-align: left; padding: 13px 14px; border: 2px solid var(--ink); background: var(--paper); font-size: 17px; cursor: pointer; border-radius: 0; }
+  .opt[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  input.text { width: 100%; padding: 13px 14px; border: 2px solid var(--ink); font-size: 17px; border-radius: 0; background: var(--paper); }
+  input.text:focus, .opt:focus-visible { outline: 3px solid var(--tint); outline-offset: 1px; }
+  .hint { font-size: 14px; color: var(--muted); margin: 8px 0 0; min-height: 1em; }
+  .send { width: 100%; padding: 18px; margin-top: 8px; border: none; background: var(--ink); color: #fff; font-size: 19px; font-weight: 500; cursor: pointer; }
+  .send:disabled { opacity: .45; cursor: default; }
+  .done { display: none; padding: 40px 0; }
+  .done h1 { font-size: 44px; font-weight: 500; letter-spacing: -1px; margin: 10px 0 12px; }
+  .done p { font-size: 18px; color: #444; }
+  .done a { display: inline-block; margin-top: 12px; padding: 14px 18px; border: 2px solid var(--ink); color: var(--ink); text-decoration: none; font-size: 17px; }
+  .err { color: var(--accent); font-size: 15px; min-height: 1.2em; margin-top: 10px; }
+</style>
+</head>
+<body>
+<header class="bar"><img class="logo" src="logo.svg" alt="INF·A·U LAB" height="28"><span class="meta muted">Session 01</span></header>
+<main>
+  <div id="form">
+    <section class="intro">
+      <span class="meta muted">Computational Urban Morphology :: Basic</span>
+      <h1>Who's in the room?</h1>
+      <p>Six quick taps, anonymous. Then watch the projector.</p>
+    </section>
+    <div id="qs"></div>
+    <button class="send" id="send" disabled>Send</button>
+    <div class="err" id="err" role="status"></div>
+  </div>
+  <section class="done" id="done">
+    <span class="meta accent">Sent</span>
+    <h1>Thanks!<br>Look at the projector.</h1>
+    <p>You can change your answers any time; only your latest ones count.</p>
+    <a id="results">See everyone's answers →</a><br>
+    <a id="again" href="#">Change my answers</a>
+  </section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="common.js"></script>
+<script>
+const answers = {};
+const qs = document.getElementById("qs"), send = document.getElementById("send"), err = document.getElementById("err");
+let countries = [];
+
+function refresh() {
+  send.disabled = !QUESTIONS.every(q => answers[q.id]);
+}
+
+QUESTIONS.forEach((q, i) => {
+  const box = document.createElement("section");
+  box.className = "q";
+  box.innerHTML = `<span class="meta muted">${String(i + 1).padStart(2, "0")} / ${String(QUESTIONS.length).padStart(2, "0")}</span><h2></h2>`;
+  box.querySelector("h2").textContent = q.q;
+  if (q.type === "choice") {
+    const opts = document.createElement("div"); opts.className = "opts";
+    q.options.forEach(o => {
+      const b = document.createElement("button"); b.className = "opt"; b.type = "button"; b.textContent = o; b.setAttribute("aria-pressed", "false");
+      b.onclick = () => { answers[q.id] = o; opts.querySelectorAll(".opt").forEach(x => x.setAttribute("aria-pressed", String(x === b))); refresh(); };
+      opts.appendChild(b);
+    });
+    box.appendChild(opts);
+  } else {
+    const inp = document.createElement("input"); inp.className = "text"; inp.autocomplete = "off";
+    const hint = document.createElement("p"); hint.className = "hint";
+    if (q.type === "country") {
+      inp.placeholder = "Start typing, e.g. Germany"; inp.setAttribute("list", "countries");
+      inp.oninput = () => {
+        const v = inp.value.trim().toLowerCase();
+        const hit = countries.find(c => c.toLowerCase() === v);
+        answers[q.id] = hit || "";
+        hint.textContent = v && !hit ? "Pick a country from the list" : "";
+        refresh();
+      };
+    } else {
+      inp.placeholder = "e.g. walkable"; inp.maxLength = 20;
+      inp.oninput = () => { answers[q.id] = cleanWord(inp.value); refresh(); };
+    }
+    box.append(inp, hint);
+  }
+  qs.appendChild(box);
+});
+
+fetch(ATLAS).then(r => r.json()).then(topo => {
+  countries = topojson.feature(topo, topo.objects.countries).features.map(f => f.properties.name).filter(Boolean).sort();
+  const dl = document.createElement("datalist"); dl.id = "countries";
+  countries.forEach(c => { const o = document.createElement("option"); o.value = c; dl.appendChild(o); });
+  document.body.appendChild(dl);
+}).catch(() => { err.textContent = "Couldn't load the country list. Check your connection and reload."; });
+
+const resultsUrl = "results.html" + location.search;
+document.getElementById("results").href = resultsUrl;
+document.getElementById("again").onclick = e => { e.preventDefault(); document.getElementById("done").style.display = "none"; document.getElementById("form").style.display = ""; };
+
+send.onclick = async () => {
+  send.disabled = true; err.textContent = "";
+  try {
+    await sendAnswers(answers);
+    document.getElementById("form").style.display = "none";
+    document.getElementById("done").style.display = "block";
+    window.scrollTo(0, 0);
+  } catch {
+    err.textContent = "That didn't go through. Try again in a few seconds.";
+    refresh();
+  }
+};
+</script>
+</body>
+</html>

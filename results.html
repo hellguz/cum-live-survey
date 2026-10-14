@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Who's in the room · results</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+  header.bar { padding: 1.6vh 2.4vw; }
+  header.bar svg.logo, header.bar img.logo { height: 3.6vh; }
+  .title { display: flex; align-items: baseline; gap: 1.6vw; }
+  .title h1 { font-size: 3.4vh; font-weight: 400; letter-spacing: .04em; text-transform: uppercase; margin: 0; }
+  .live { display: inline-flex; align-items: center; gap: 8px; }
+  .live i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  .live.off i { background: var(--muted); }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1.25fr 1fr; }
+  .card { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 1vh; padding: 1.8vh 1.4vw; border-left: 2px solid var(--ink); border-top: 2px solid var(--ink); }
+  .card .head { display: flex; justify-content: space-between; gap: 12px; }
+  .card .head .meta { font-size: 1.5vh; }
+  .card h2 { font-size: 2.5vh; font-weight: 500; margin: 0; line-height: 1.15; }
+  .map { grid-column: 1 / span 3; border-left: none; border-top: none; position: relative; }
+  .map svg { flex: 1; min-height: 0; width: 100%; }
+  .map .legend { position: absolute; left: 1.4vw; bottom: 1.8vh; display: flex; flex-direction: column; gap: .4vh; font-size: 1.9vh; }
+  .map .legend b { font-weight: 500; }
+  .side { border-top: none; justify-content: space-between; }
+  .count { font-size: 12vh; font-weight: 300; letter-spacing: -.04em; line-height: 1; }
+  .join { display: flex; gap: 1vw; align-items: center; }
+  .join .qr svg { width: 14vh; height: 14vh; display: block; }
+  .join .url { font-size: 1.8vh; word-break: break-all; color: var(--muted); }
+  .words { display: flex; flex-wrap: wrap; align-content: flex-start; gap: .6vh 1vw; overflow: hidden; flex: 1; }
+  .words span { line-height: 1.1; }
+  .row2 { border-left: 2px solid var(--ink); }
+  .row2:first-of-type { border-left: none; }
+  .bars { display: flex; flex-direction: column; gap: 1.3vh; margin-top: auto; }
+  .bar .lab { display: flex; justify-content: space-between; font-size: 1.9vh; gap: 8px; }
+  .bar .lab span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .track { height: 1.2vh; background: var(--ground); margin-top: .5vh; }
+  .bar .fill { height: 100%; background: var(--accent); width: 0; transition: width .6s cubic-bezier(.32,.72,0,1); }
+  .empty { color: var(--muted); font-size: 2vh; }
+  @media (max-width: 900px), (orientation: portrait) {
+    html, body { height: auto; }
+    header.bar { padding: 14px 16px; } header.bar img.logo { height: 26px; }
+    .title h1 { font-size: 16px; }
+    .grid { display: block; }
+    .card { border-left: none; padding: 16px; gap: 8px; }
+    .card .head .meta { font-size: 12px; } .card h2 { font-size: 20px; }
+    .map { height: 62vw; min-height: 240px; }
+    .map .legend { font-size: 13px; left: 16px; bottom: 12px; }
+    .count { font-size: 64px; } .join .qr svg { width: 96px; height: 96px; } .join .url { font-size: 13px; }
+    .bar .lab { font-size: 15px; } .bar .track { height: 8px; }
+    .words { min-height: 60px; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="title"><img class="logo" src="logo.svg" alt="INF·A·U LAB"><h1>Who's in the room</h1></div>
+  <span class="live meta off" id="live"><i></i><span>connecting</span></span>
+</header>
+<div class="grid">
+  <section class="card map" id="mapCard">
+    <div class="head"><span class="meta">Where we're from</span><span class="meta muted" id="nCountries"></span></div>
+    <svg id="map" role="img" aria-label="World map coloured by number of students per country"></svg>
+    <div class="legend" id="topCountries"></div>
+  </section>
+  <section class="card side">
+    <div class="head"><span class="meta">Answers</span><span class="meta muted">live</span></div>
+    <div class="count" id="count">0</div>
+    <div class="head"><span class="meta">Dream city in one word</span></div>
+    <div class="words" id="words"><span class="empty">…</span></div>
+    <div class="join"><div class="qr" id="qr"></div><div><div class="meta">Join</div><div class="url" id="url"></div></div></div>
+  </section>
+  <div id="barCards" style="display:contents"></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+<script src="common.js"></script>
+<script>
+const ACC = "#1e3aff", TINT = "#dfe4ff", EMPTY = "#f1f1f1";
+const choiceQs = QUESTIONS.filter(q => q.type === "choice");
+let latest = [], world = null;
+
+// join link + QR
+const joinUrl = new URL("index.html" + location.search.replace(/[?&]demo=1/, ""), location.href).href;
+document.getElementById("url").textContent = joinUrl.replace(/^https?:\/\//, "");
+try { const qr = qrcode(0, "M"); qr.addData(joinUrl); qr.make(); document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch {}
+
+// bar cards
+const barHost = document.getElementById("barCards");
+choiceQs.forEach((q, i) => {
+  const c = document.createElement("section"); c.className = "card row2"; if (i === 0) c.style.borderLeft = "none";
+  c.innerHTML = `<div class="head"><span class="meta">${String(i + 2).padStart(2, "0")}</span><span class="meta muted"></span></div><h2></h2><div class="bars"></div>`;
+  c.querySelector("h2").textContent = q.q;
+  const bars = c.querySelector(".bars");
+  q.options.forEach(o => {
+    const b = document.createElement("div"); b.className = "bar";
+    b.innerHTML = `<div class="lab"><span></span><span class="n">0</span></div><div class="track"><div class="fill"></div></div>`;
+    b.querySelector(".lab span").textContent = o; b.dataset.opt = o; bars.appendChild(b);
+  });
+  c.dataset.q = q.id; barHost.appendChild(c);
+});
+
+function drawMap() {
+  if (!world) return;
+  const svg = d3.select("#map"), el = svg.node(), w = el.clientWidth, h = el.clientHeight;
+  if (!w || !h) return;
+  const proj = d3.geoEqualEarth().fitExtent([[4, 4], [w - 4, h - 4]], { type: "Sphere" });
+  const geo = d3.geoPath(proj);
+  const counts = tally(latest, "country"), max = Math.max(1, ...counts.values());
+  const col = d3.scaleLinear().domain([1, Math.max(2, max)]).range([TINT, ACC]).clamp(true);
+  svg.attr("viewBox", `0 0 ${w} ${h}`);
+  svg.selectAll("path.c").data(world).join("path").attr("class", "c").attr("d", geo)
+    .attr("fill", f => counts.get(f.properties.name) ? col(counts.get(f.properties.name)) : EMPTY)
+    .attr("stroke", "#ffffff").attr("stroke-width", .6);
+  const top = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const leg = document.getElementById("topCountries"); leg.innerHTML = "";
+  top.forEach(([name, n]) => { const d = document.createElement("div"); d.innerHTML = "<b></b> <span class='muted'></span>"; d.querySelector("b").textContent = n; d.querySelector("span").textContent = name; leg.appendChild(d); });
+  document.getElementById("nCountries").textContent = counts.size ? `${counts.size} ${counts.size === 1 ? "country" : "countries"}` : "";
+}
+
+function render() {
+  document.getElementById("count").textContent = latest.length;
+  drawMap();
+  for (const c of barHost.children) {
+    const t = tally(latest, c.dataset.q), total = [...t.values()].reduce((a, b) => a + b, 0);
+    c.querySelector(".head .muted").textContent = total ? `${total} answers` : "";
+    const max = Math.max(1, ...t.values());
+    c.querySelectorAll(".bar").forEach(b => { const n = t.get(b.dataset.opt) || 0; b.querySelector(".n").textContent = n; b.querySelector(".fill").style.width = (n / max * 100) + "%"; });
+  }
+  const words = [...tally(latest.map(a => ({ city: cleanWord(a.city) })), "city")].sort((a, b) => b[1] - a[1]).slice(0, 40);
+  const box = document.getElementById("words"); box.innerHTML = "";
+  if (!words.length) { box.innerHTML = '<span class="empty">…</span>'; }
+  const wmax = Math.max(1, ...words.map(w => w[1]));
+  words.forEach(([w, n], i) => { const s = document.createElement("span"); s.textContent = w; s.style.fontSize = `calc(${1.8 + 2.6 * n / wmax}vh)`; s.style.color = i === 0 && n > 1 ? ACC : "inherit"; s.style.fontWeight = n === wmax ? 500 : 400; box.appendChild(s); });
+}
+
+fetch(ATLAS).then(r => r.json()).then(topo => { world = topojson.feature(topo, topo.objects.countries).features.filter(f => f.properties.name !== "Antarctica"); drawMap(); });
+window.addEventListener("resize", drawMap);
+
+const live = document.getElementById("live");
+if (new URLSearchParams(location.search).get("demo") === "1") {
+  // local preview with made-up answers; nothing is sent anywhere
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const cs = ["Germany", "Germany", "Germany", "India", "India", "China", "Turkey", "Iran", "Italy", "Mexico", "Brazil", "Ukraine", "Egypt", "Indonesia"];
+  const ws = ["walkable", "green", "walkable", "quiet", "dense", "bikes", "rivers", "green", "cozy", "trees"];
+  latest = Array.from({ length: 27 }, () => ({ country: pick(cs), city: pick(ws), ...Object.fromEntries(choiceQs.map(q => [q.id, pick(q.options)])) }));
+  live.className = "live meta"; live.querySelector("span").textContent = "demo";
+  render();
+} else {
+  subscribe(list => { latest = list; render(); }, s => { live.className = "live meta" + (s === "live" ? "" : " off"); live.querySelector("span").textContent = s; });
+  render();
+}
+</script>
+</body>
+</html>
